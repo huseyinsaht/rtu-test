@@ -1,0 +1,4 @@
+== MODBUS RTU Communication Test
+* It prints the read or written register.
+* Calculates the elapsed times and prints the processing times of the threads on which the processes are executed.
+
