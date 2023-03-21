@@ -6,14 +6,13 @@ import java.util.stream.Collectors;
 
 import com.ghgande.j2mod.modbus.facade.ModbusSerialMaster;
 import com.ghgande.j2mod.modbus.procimg.InputRegister;
+import com.ghgande.j2mod.modbus.procimg.Register;
+import com.ghgande.j2mod.modbus.procimg.SimpleRegister;
 import com.google.common.base.Stopwatch;
 
 import modbustest.util.Log;
 
 public class Battery extends ModbusRtuDevice implements Runnable {
-	private static final long DEFAULT_EXECUTION_DURATION = 300;
-	private long lastExecuteDuration = DEFAULT_EXECUTION_DURATION; // initialize to some default
-
 	private final int id;
 
 	private final Stopwatch stopwatch = Stopwatch.createUnstarted();
@@ -44,50 +43,103 @@ public class Battery extends ModbusRtuDevice implements Runnable {
 				}
 			}
 			long duration = System.currentTimeMillis() - startTime;
-			Log.info("My thread " + Thread.currentThread().getName() + " execution time: " + duration + " ms");
+			Log.info("My thread " + Thread.currentThread().getName() + Log.HIGH_INTENSITY + Log.RED
+					+ " execution time: " + duration + " ms" + Log.ANSI_RESET);
 		}
 	}
 
 	private void callModbusRegisters(ModbusSerialMaster master, int unitId) {
 		try {
 			Log.info(Log.HIGH_INTENSITY + Log.GREEN + "Trying Unit-ID [" + unitId + "]" + Log.ANSI_RESET);
-
-			var registers = master.readInputRegisters(unitId, 1, 21);
-
-			printLog(unitId, 101, execute(master, registers, unitId, 101, 70));
-
-			printLog(unitId, 201, execute(master, registers, unitId, 201, 96));
-
-			printLog(unitId, 301, execute(master, registers, unitId, 301, 36));
+			var reg = new SimpleRegister(0x5f01);
+			var beat = new SimpleRegister(1200);
+			long totalTimeDuration = writeExecute(master, reg, unitId, 18, 1);
+			totalTimeDuration += writeExecute(master, beat, unitId, 3064, 2);
+			totalTimeDuration += execute(master, unitId, 0, 7);
+			totalTimeDuration += execute(master, unitId, 2176, 7);
+			totalTimeDuration += execute(master, unitId, 2762, 12);
+			totalTimeDuration += execute(master, unitId, 17, 5);
+			totalTimeDuration += execute(master, unitId, 161, 1);
+			totalTimeDuration += execute(master, unitId, 2628, 101);
+			totalTimeDuration += execute(master, unitId, 2730, 46);
+			totalTimeDuration += execute(master, unitId, 2785, 30);
+			totalTimeDuration += execute(master, unitId, 3064, 35);
+			totalTimeDuration += execute(master, unitId, 3080, 7);
+			totalTimeDuration += execute(master, unitId, 3072, 47);
+			totalTimeDuration += execute(master, unitId, 3072 + 48, 114);
+			for (int i = 0; i < 9; i++) {
+				totalTimeDuration += execute(master, unitId, 3072 + 128 + i * 20, 19);
+			}
+			Log.info(Log.HIGH_INTENSITY + Log.WHITE + "Total Time Duration[" + totalTimeDuration + "]"
+					+ Log.ANSI_RESET);
+			// printWriteLog(unitId, 1, writeExecute(master, registers, reg, unitId, 1,
+			// 52));
+			// printLog(unitId, 1, execute(master, registers, unitId, 1, 52));
+			// printLog(unitId, 101, execute(master, registers, unitId, 101, 70));
+			// printLog(unitId, 201, execute(master, registers, unitId, 201, 96));
+			// printLog(unitId, 301, execute(master, registers, unitId, 301, 36));
 		} catch (Exception e) {
 			Log.error(e.getMessage());
 		}
 	}
 
-	private void printLog(int unitId, int startAddress, InputRegister[] registers) {
-		Log.info("ReadInputRegisters" //
+	private void printLog(int unitId, int startAddress, InputRegister[] registers, Long executionDuration) {
+		Log.info(Log.HIGH_INTENSITY + Log.CYAN//
+				+ "ReadInputRegisters" //
+				+ Log.ANSI_RESET//
 				+ "[" + unitId + ":" + startAddress + "/0x" + Integer.toHexString(startAddress) + "]: " //
-				+ this.getExecuteDuration() + "ms " //
+				+ Log.HIGH_INTENSITY + Log.GREEN //
+				+ executionDuration + "ms " //
+				+ Log.ANSI_RESET//
 				+ Arrays.stream(registers) //
 						.map(r -> String.format("%4s", Integer.toHexString(r.getValue())).replace(' ', '0')) //
 						.collect(Collectors.joining(" ")));
 	}
 
-	public InputRegister[] execute(ModbusSerialMaster master, InputRegister[] registers, int unitId, int startAdress,
-			int size) {
+	private void printWriteLog(int unitId, int startAddress, InputRegister[] registers, Long executionDuration) {
+		Log.info(Log.HIGH_INTENSITY + Log.YELLOW//
+				+ "WriteRegisters" //
+				+ Log.ANSI_RESET//
+				+ "[" + unitId + ":" + startAddress + "/0x" + Integer.toHexString(startAddress) + "]: " //
+				+ Log.HIGH_INTENSITY + Log.GREEN //
+				+ executionDuration + "ms " //
+				+ Log.ANSI_RESET//
+				+ Arrays.stream(registers) //
+						.map(r -> String.format("%4s", Integer.toHexString(r.getValue())).replace(' ', '0')) //
+						.collect(Collectors.joining(" ")));
+	}
+
+	public synchronized long execute(ModbusSerialMaster master, int unitId, int startAdress, int size) {
 		this.stopwatch.reset();
 		this.stopwatch.start();
+		InputRegister[] registers = null;
+		Long lastExecuteDuration;
 		try {
-			registers = master.readInputRegisters(unitId, startAdress, size);
+			registers = master.readMultipleRegisters(unitId, startAdress, size);
 		} catch (Exception e) {
 			Log.error(e.getMessage());
 		} finally {
-			this.lastExecuteDuration = this.stopwatch.elapsed(TimeUnit.MILLISECONDS);
+			lastExecuteDuration = this.stopwatch.elapsed(TimeUnit.MILLISECONDS);
 		}
-		return registers;
+		this.printLog(unitId, startAdress, registers, lastExecuteDuration);
+		return lastExecuteDuration;
 	}
 
-	public long getExecuteDuration() {
-		return this.lastExecuteDuration;
+	public synchronized long writeExecute(ModbusSerialMaster master, Register reg, int unitId, int startAdress,
+			int size) {
+		this.stopwatch.reset();
+		this.stopwatch.start();
+		InputRegister[] registers = null;
+		Long lastExecuteDuration;
+		try {
+			master.writeSingleRegister(unitId, startAdress, reg);
+			registers = master.readMultipleRegisters(unitId, startAdress, size);
+		} catch (Exception e) {
+			Log.error(e.getMessage());
+		} finally {
+			lastExecuteDuration = this.stopwatch.elapsed(TimeUnit.MILLISECONDS);
+		}
+		this.printWriteLog(unitId, startAdress, registers, lastExecuteDuration);
+		return lastExecuteDuration;
 	}
 }

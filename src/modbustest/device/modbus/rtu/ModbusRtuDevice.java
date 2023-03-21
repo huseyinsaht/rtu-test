@@ -9,7 +9,7 @@ import modbustest.device.Device;
 
 public abstract class ModbusRtuDevice implements Device {
 
-	private final static int TIMEOUT = 500;
+	private final static int TIMEOUT = 3000;
 	private final static int RETRIES = 1; // default would be 3
 
 	protected final Optional<Integer> unitId;
@@ -24,7 +24,7 @@ public abstract class ModbusRtuDevice implements Device {
 	protected ModbusSerialMaster getModbusSerialMaster() throws Exception {
 		var params = new SerialParameters();
 		params.setPortName(this.systemportname);
-		params.setBaudRate(38400);
+		params.setBaudRate(9600);
 		params.setDatabits(8);
 		params.setParity("None");
 		params.setEncoding("rtu");

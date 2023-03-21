@@ -7,23 +7,22 @@ public class ModbustestApp {
 
 	public static void main(String[] args) throws Exception {
 		try {
-			tryBridge("ttySC0");
+			tryBridge();
 		} catch (Exception e) {
 			Log.exception(e);
 		}
 	}
 
-	private static void tryBridge(String bridgeName) {
+	private static void tryBridge() {
 		var task = new Runnable() {
 
 			@Override
 			public void run() {
 				var startTime = System.currentTimeMillis();
-
 				var endTime = startTime + 300 * 1000;
 				while (System.currentTimeMillis() < endTime) {
-					new Battery("/dev/ttySC0", 1).run();
-					new Battery("/dev/ttySC0", 2).run();
+					new Battery("/dev/ttyAMA0", 1).run();
+					new Battery("/dev/ttyAMA0", 2).run();
 				}
 			}
 		};
